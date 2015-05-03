@@ -6,3 +6,4 @@ __pycache__/
 /nodes.db
 /oauth_data
 /.idea
+.DS_Store
