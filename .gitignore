@@ -5,3 +5,4 @@ __pycache__/
 /endpoint_data
 /nodes.db
 /oauth_data
+/.idea
