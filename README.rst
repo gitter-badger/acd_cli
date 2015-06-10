@@ -1,9 +1,9 @@
-.. image:: https://raw.githubusercontent.com/yadayada/acd_cli/master/docs/img/donate.png
-   :alt: Donate via PayPal
-   :target: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=V4V4HVSAH4VW8
+|Donate|
 
 acd\_cli
 ========
+
+|Status| |Latest Version| |Supported Python versions|
 
 **acd\_cli** provides a command line interface to Amazon Cloud Drive and allows mounting your
 cloud drive using FUSE for *read* access. It is currently in beta stage.
@@ -299,3 +299,13 @@ Recent Changes
 * setuptools support
 * workaround for download of files larger than 10 GiB
 * automatic resuming of downloads
+
+.. |Donate| image:: https://raw.githubusercontent.com/yadayada/acd_cli/master/docs/img/donate.png
+   :alt: Donate via PayPal
+   :target: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=V4V4HVSAH4VW8
+.. |Status| image:: https://pypip.in/status/acd_cli/badge.svg
+   :target: https://pypi.python.org/pypi/acd_cli/
+.. |Latest Version| image:: https://pypip.in/version/acd_cli/badge.svg?text=version
+   :target: https://pypi.python.org/pypi/acd_cli/
+.. |Supported Python versions| image:: https://pypip.in/py_versions/acd_cli/badge.svg
+   :target: https://pypi.python.org/pypi/acd_cli/
