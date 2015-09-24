@@ -1,49 +1,56 @@
-.. image:: https://raw.githubusercontent.com/yadayada/acd_cli/master/docs/img/donate.png
-   :alt: Donate via PayPal
-   :target: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=V4V4HVSAH4VW8
+|Donate| |Gitter| |PyVersion| |Status| |License| |Build| |PyPiVersion| |PyPiDownloadsMonth|
 
 acd\_cli
 ========
 
 **acd\_cli** provides a command line interface to Amazon Cloud Drive and allows mounting your
-cloud drive using FUSE for *read* access. It is currently in beta stage.
+cloud drive using FUSE for read and write access. It is currently in beta stage.
 
-Features
---------
+Node Cache Features
+-------------------
 
-- local node caching
+- caching of local node metadata in an SQLite database
 - addressing of remote nodes via a pathname (e.g. ``/Photos/kitten.jpg``)
+- file search
+
+CLI Features
+------------
+
+- tree or flat listing of files and folders
 - simultaneous uploads/downloads, retry on error
 - basic plugin support
 
-File operations
+File Operations
 ~~~~~~~~~~~~~~~
 
-- tree or flat listing of files and folders
 - upload/download of single files and directories
+- streamed upload/download
 - folder creation
 - trashing/restoring
 - moving/renaming nodes
 
-Quick start
+Quick Start
 -----------
 
 Installation
 ~~~~~~~~~~~~
 
-The easiest way is to directly install from github. Please check which pip command is
-appropriate for Python 3 packages in your environment. I will be using 'pip3' in the examples.
+Please check which pip command is appropriate for Python 3 packages in your environment.
+I will be using 'pip3' as superuser in the examples.
+
+The easiest way is to directly install from PyPI.
+::
+
+   pip3 install --upgrade --pre acdcli
+
+
+The most up-to-date way is to directly install from github.
 ::
 
    pip3 install --upgrade git+https://github.com/yadayada/acd_cli.git
 
 
-To install from a downloaded or cloned directory, run pip in the project's root directory like so:
-::
-
-    pip3 install --upgrade .
-
-If you do not want to install, have a look at the necessary dependencies_.
+Further setup options and dependencies are described in the `setup guide <docs/setup.rst>`_.
 
 First Run
 ~~~~~~~~~
@@ -76,6 +83,8 @@ be asked to paste the redirect URL into your shell.
 Usage
 -----
 
+acd_cli can be run as ``acd_cli`` or ``acdcli``.
+
 Most actions need the node cache to be initialized and up-to-date, so please run a sync.
 A sync will fetch the changes since the last sync or the full node list if the cache is empty.
 
@@ -87,12 +96,16 @@ The following actions are built in
 
         tree (t)            print directory tree [offline operation]
         children (ls)       list a folder's children [offline operation]
-        find (f)            find nodes by name [offline operation]
+
+        find (f)            find nodes by name [offline operation] [case insensitive]
         find-md5 (fm)       find files by MD5 hash [offline operation]
+        find-regex (fr)     find nodes by regular expression [offline operation] [case insensitive]
 
         upload (ul)         file and directory upload to a remote destination
         overwrite (ov)      overwrite file A [remote] with content of file B [local]
+        stream (st)         upload the standard input stream to a file
         download (dl)       download a remote folder or file; will skip existing local files
+        cat                 output a file to the standard output stream
 
         create (c, mkdir)   create folder using an absolute path
 
@@ -103,82 +116,69 @@ The following actions are built in
         move (mv)           move node A into folder B
         rename (rn)         rename a node
 
-        resolve (rs)        resolve a path to a node ID
+        resolve (rs)        resolve a path to a node ID [offline operation]
 
         usage (u)           show drive usage data
         quota (q)           show drive quota [raw JSON]
         metadata (m)        print a node's metadata [raw JSON]
-        
+
         mount               mount the cloud drive at a local directory
+        umount              unmount cloud drive(s)
 
-Please run ``acd_cli --help`` to get a current list of the available actions.
-You may also get a list of further arguments and their order of an action by calling ``acd_cli [action] --help``.
+Please run ``acd_cli --help`` to get a current list of the available actions. A list of further
+arguments of an action and their order can be printed by calling ``acd_cli [action] --help``.
 
-You may provide most node arguments as a 22 character ID or a UNIX-style path.
+Most node arguments may be specified as a 22 character ID or a UNIX-style path.
 Trashed nodes' paths might not be able to be resolved correctly; use their ID instead.
 
-The number of concurrent transfers can be specified using the argument ``-x [no]``.
+There are more detailed instructions for `file transfer actions <docs/transfer.rst>`_ and
+`find actions <docs/find.rst>`_.
 
-When uploading/downloading large amounts of files, it is advisable to save the log messages to a file.
-This can be done by using the verbose argument and appending ``2> >(tee acd.log >&2)`` to the command.
+Mounting
+~~~~~~~~
 
-Files can be excluded via optional parameter by file ending, e.g. ``-xe bak``,
-or regular expression on the whole file name, e.g. ``-xr "^thumbs\.db$"``.
-Both exclusion methods are case insensitive.
+First, create an empty mount directory, then run ``acd_cli mount path/to/mountpoint``.
+To unmount later, run ``acd_cli umount``.
 
-Exit status
+Further information can be found in the `FUSE documentation <docs/FUSE.rst>`_.
+
+Exit Status
 ~~~~~~~~~~~
 
 When the script is done running, its exit status can be checked for flags. If no error occurs,
 the exit status will be 0. Possible flag values are:
 
-=====================    =======
-        flag              value
-=====================    =======
-argument error               2
-failed file transfer         8
-upload timeout              16
-hash mismatch               32
-error creating folder       64
-file size mismatch         128
-cache outdated             256
-duplicate                  512
-=====================    =======
+===========================  =======
+        flag                  value
+===========================  =======
+general error                    1
+argument error                   2
+failed file transfer             8
+upload timeout                  16
+hash mismatch                   32
+error creating folder           64
+file size mismatch             128
+cache outdated                 256
+remote duplicate               512
+duplicate inode               1024
+file/folder name collision    2048
+===========================  =======
 
 If multiple errors occur, their values will be compounded by a binary OR operation.
 
-Mounting
-~~~~~~~~
+Proxy support
+~~~~~~~~~~~~~
 
-First, create an empty mount directory, then run ``acd_cli mount path/to/mountpoint``. 
-To unmount later, run ``fusermount -u path/to/mountpoint``.
+`Requests <https://github.com/kennethreitz/requests>`_ supports HTTP(S) proxies via environment
+variables. Since all connections to Amazon Cloud Drive are using HTTPS, you need to
+set the variable ``HTTPS_PROXY``. The following example shows how to do that in a bash-compatible
+environment.
+::
 
-=====================  ===========
-Feature                 Working
-=====================  ===========
-Basic operations
-----------------------------------
-List directory           ✅
-Reade                    ✅
-Write                    ❌
-Rename                   ✅
-Move                     ✅
-Trashing                 ✅ [#]_
-OS-level trashing        partially [#]_
-View trash               ❌
-Misc
-----------------------------------
-Automatic sync           ❌
-Hard links               partially [#]_
-Symbolic links           ❌
-=====================  ===========
+    $ export HTTPS_PROXY="https://user:pass@1.2.3.4:8080/"
 
-.. [#] equivalent to a filesystem level permanent delete
-.. [#] restoration info cannot be written, manual restoring should work
-.. [#] manually created hard links will be listed
-
-Usage example
--------------
+CLI Usage Example
+-----------------
 
 In this example, a two-level folder hierarchy is created in an empty cloud drive.
 Then, a relative local path ``local/spam`` is uploaded recursively using two connections.
@@ -210,69 +210,38 @@ Then, a relative local path ``local/spam`` is uploaded recursively using two con
 The standard node listing format includes the node ID, the first letter of its status and its full path.
 Possible statuses are "AVAILABLE" and "TRASH".
 
-Uninstalling
-------------
-
-Please run ``acd_cli delete-everything`` first to delete your authentication and node data in the cache path.
-Then, use pip to uninstall::
-
-    pip3 uninstall acdcli
-
-Then, revoke the permission for ``acd_cli_oa`` to access your cloud drive in your Amazon profile,
-more precisely at https://www.amazon.com/ap/adam.
-
-
 Known Issues
 ------------
+
+It is not possible to upload files using Python 3.2.3, 3.3.0 and 3.3.1.
+
+If you encounter Unicode problems, check that your locale is set correctly or use the ``--utf``
+argument to force the script to use UTF-8 output encoding.
+Windows users may try to execute the provided `reg file <assets/win_codepage.reg>`_
+(tested with Windows 8.1) to set the command line interface encoding to cp65001.
 
 API Restrictions
 ~~~~~~~~~~~~~~~~
 
+- the current upload file size limit is 50GiB
 - uploads of large files >10 GiB may be successful, yet a timeout error is displayed (please check manually)
-- the maximum (upload) file size seems to be in the range of 40 and 100 GiB
 - storage of node names is case-preserving, but not case-sensitive (this concerns Linux users mainly)
 - it is not possible to share or delete files
 
 Contribute
 ----------
 
-Feel free to use the bug tracker to add issues.
-You might find the ``--verbose`` and, to a lesser extent, ``--debug`` options helpful.
-
-If you want to contribute code, have a look at `Github's general guide <https://guides.github.com/activities/contributing-to-open-source/#contributing>`_ how to do that.
-There is also a `TODO <docs/TODO.rst>`_ list.
-
-You might also want to consider making a donation to further the development of acd\_cli.
-
-.. _dependencies:
-
-Dependencies
-------------
-
-Python packages
-~~~~~~~~~~~~~~~
-
-- appdirs
-- dateutils (recommended)
-- requests >= 2.1.0
-- requests-toolbelt (recommended)
-- sqlalchemy
-
-Recommended packages are not strictly necessary; but they will be preferred to
-workarounds (in the case of dateutils) and bundled modules (requests-toolbelt).
-
-If you want to the dependencies using your distribution's packaging system and
-are using a distro based on Debian 'jessie', the necessary packages are
-``python3-appdirs python3-dateutil python3-requests python3-sqlalchemy``.
-
-FUSE
-~~~~
-
-For the mounting feature, fuse >= 2.6 is needed according to pyfuse. On a 
-Debian-based distribution, the according package should simply be named 'fuse'.
+Have a look at the `contributing guidelines <CONTRIBUTING.rst>`_.
 
 Recent Changes
 --------------
+
+..
+    0.3.1
+    ~~~~~
+
+    * general improvements for FUSE
+    * FUSE write support added
 
 0.3.0
 ~~~~~
@@ -299,3 +268,38 @@ Recent Changes
 * setuptools support
 * workaround for download of files larger than 10 GiB
 * automatic resuming of downloads
+
+
+.. |Donate| image:: https://img.shields.io/badge/paypal-donate-blue.svg
+   :alt: Donate via PayPal
+   :target: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=V4V4HVSAH4VW8
+
+.. |Gitter| image:: https://img.shields.io/badge/GITTER-join%20chat-brightgreen.svg
+   :alt: Join the Gitter chat
+   :target: https://gitter.im/cloud-drive/acd_cli
+
+.. |PyPiVersion| image:: https://img.shields.io/pypi/v/acdcli.svg
+   :alt: PyPi
+   :target: https://pypi.python.org/pypi/acdcli
+
+.. |PyVersion| image:: https://img.shields.io/badge/python-3.2+-blue.svg
+   :alt:
+
+.. |Status| image:: https://img.shields.io/badge/status-beta-yellow.svg
+   :alt:
+
+.. |License| image:: https://img.shields.io/badge/license-GPLv2+-blue.svg
+   :alt:
+
+.. |PyPiDownloadsMonth| image:: https://img.shields.io/pypi/dm/acdcli.svg
+   :alt:
+   :target: https://pypi.python.org/pypi/acdcli
+
+.. |Build| image:: https://img.shields.io/travis/yadayada/acd_cli.svg
+   :alt:
+   :target: https://travis-ci.org/yadayada/acd_cli
+
+
+.. image:: https://badges.gitter.im/Join%20Chat.svg
+   :alt: Join the chat at https://gitter.im/yadayada/acd_cli
+   :target: https://gitter.im/yadayada/acd_cli?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
